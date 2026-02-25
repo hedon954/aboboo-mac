@@ -1,8 +1,20 @@
 import { invoke } from '@tauri-apps/api/core';
-import { writeFile, readTextFile } from '@tauri-apps/plugin-fs';
+import { mkdir, writeFile, readFile, readTextFile } from '@tauri-apps/plugin-fs';
 import { save, open } from '@tauri-apps/plugin-dialog';
 import { v4 as uuidv4 } from 'uuid';
 import type { Project, Track } from '../types/project';
+
+function getMimeType(filePath: string): string {
+  const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
+  switch (ext) {
+    case 'mp3': return 'audio/mpeg';
+    case 'wav': return 'audio/wav';
+    case 'm4a': return 'audio/mp4';
+    case 'ogg': return 'audio/ogg';
+    case 'webm': return 'audio/webm';
+    default: return 'audio/mpeg';
+  }
+}
 
 export class ProjectService {
   async saveProject(project: Project, recordingBlobs: Map<string, Blob>): Promise<string | null> {
@@ -20,11 +32,12 @@ export class ProjectService {
       if (track.type === 'recording') {
         const blob = recordingBlobs.get(track.id);
         if (blob) {
+          await mkdir(recordingsDir, { recursive: true });
           const fileName = `${track.id}.webm`;
           const arrayBuffer = await blob.arrayBuffer();
           await writeFile(`${recordingsDir}/${fileName}`, new Uint8Array(arrayBuffer));
           updatedTracks.push({ ...track, audioPath: `recordings/${project.id}/${fileName}` });
-        } else {
+        } else if (track.audioPath) {
           updatedTracks.push(track);
         }
       } else {
@@ -58,11 +71,19 @@ export class ProjectService {
     const blobUrls = new Map<string, string>();
 
     for (const track of project.tracks) {
-      if (track.audioPath) {
+      if (!track.audioPath) continue;
+      try {
         const fullPath = track.type === 'original'
           ? track.audioPath
           : `${appDataDir}/${track.audioPath}`;
-        blobUrls.set(track.id, `asset://${fullPath}`);
+
+        const bytes = await readFile(fullPath);
+        const mime = getMimeType(track.audioPath);
+        const blob = new Blob([bytes], { type: mime });
+        const url = URL.createObjectURL(blob);
+        blobUrls.set(track.id, url);
+      } catch (e) {
+        console.error(`Failed to load track "${track.name}":`, e);
       }
     }
 

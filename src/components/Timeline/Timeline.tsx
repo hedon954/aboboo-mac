@@ -7,33 +7,42 @@ import type { Track } from '../../types/project';
 interface TrackRowProps {
   track: Track;
   blobUrl: string;
-  currentTime: number;
-  duration: number;
   onSeek: (time: number) => void;
 }
 
-function TrackRow({ track, blobUrl, currentTime, duration, onSeek }: TrackRowProps) {
+function TrackRow({ track, blobUrl, onSeek }: TrackRowProps) {
   const { updateTrack, removeTrack } = useProjectStore();
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: '1px solid #333' }}>
-      <div style={{ width: 140, flexShrink: 0 }}>
+      <div style={{ width: 120, flexShrink: 0 }}>
         <div style={{ fontSize: 12, color: '#ccc', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {track.name}
         </div>
-        <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+        <div style={{ display: 'flex', gap: 4, marginTop: 4, alignItems: 'center' }}>
           <button
-            onClick={() => updateTrack(track.id, { muted: !track.muted })}
-            style={{ fontSize: 10, padding: '2px 6px', background: track.muted ? '#555' : '#4a9eff', border: 'none', borderRadius: 3, color: '#fff', cursor: 'pointer' }}
+            onClick={() => {
+              const newMuted = !track.muted;
+              updateTrack(track.id, { muted: newMuted });
+              audioEngine.setVolume(track.id, track.volume, newMuted);
+            }}
+            style={{
+              fontSize: 10, padding: '2px 6px',
+              background: track.muted ? '#c0392b' : '#4a9eff',
+              border: 'none', borderRadius: 3, color: '#fff', cursor: 'pointer',
+            }}
           >
-            {track.muted ? 'M' : 'M'}
+            {track.muted ? '🔇' : '🔊'}
           </button>
           {track.type === 'recording' && (
             <button
-              onClick={() => removeTrack(track.id)}
+              onClick={() => {
+                removeTrack(track.id);
+                audioEngine.removeBuffer(track.id);
+              }}
               style={{ fontSize: 10, padding: '2px 6px', background: '#c0392b', border: 'none', borderRadius: 3, color: '#fff', cursor: 'pointer' }}
             >
-              X
+              ✕
             </button>
           )}
           <input
@@ -51,8 +60,7 @@ function TrackRow({ track, blobUrl, currentTime, duration, onSeek }: TrackRowPro
       <div style={{ flex: 1 }}>
         <Waveform
           url={blobUrl}
-          currentTime={currentTime}
-          duration={duration}
+          trackStartTime={track.startTime}
           onSeek={onSeek}
           onReady={(d) => updateTrack(track.id, { duration: d })}
           color={track.type === 'original' ? '#4a9eff' : '#2ecc71'}
@@ -64,14 +72,17 @@ function TrackRow({ track, blobUrl, currentTime, duration, onSeek }: TrackRowPro
 
 export function Timeline() {
   const { project, blobUrls } = useProjectStore();
-  const { currentTime, duration, setCurrentTime } = usePlayerStore();
+  const { setCurrentTime, setIsPlaying } = usePlayerStore();
 
   const handleSeek = async (time: number) => {
     const wasPlaying = audioEngine.seek(time);
     setCurrentTime(time);
     if (wasPlaying && project) {
-      const tracks = project.tracks.map(t => ({ id: t.id, startTime: t.startTime, volume: t.volume, muted: t.muted }));
+      const tracks = project.tracks.map(t => ({
+        id: t.id, startTime: t.startTime, volume: t.volume, muted: t.muted,
+      }));
       await audioEngine.play(tracks);
+      setIsPlaying(true);
     }
   };
 
@@ -87,8 +98,6 @@ export function Timeline() {
             key={track.id}
             track={track}
             blobUrl={url}
-            currentTime={currentTime}
-            duration={duration}
             onSeek={handleSeek}
           />
         );

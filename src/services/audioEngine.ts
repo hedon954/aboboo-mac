@@ -14,7 +14,8 @@ export class AudioEngine {
 
   async loadAudio(id: string, arrayBuffer: ArrayBuffer): Promise<number> {
     const ctx = this.getCtx();
-    const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+    const copy = arrayBuffer.slice(0);
+    const audioBuffer = await ctx.decodeAudioData(copy);
     this.buffers.set(id, audioBuffer);
     return audioBuffer.duration;
   }
@@ -22,12 +23,15 @@ export class AudioEngine {
   async play(tracks: Array<{ id: string; startTime: number; volume: number; muted: boolean }>) {
     if (this.playing) return;
     const ctx = this.getCtx();
-    await ctx.resume();
+    if (ctx.state === 'suspended') await ctx.resume();
     const offset = this.pausedAt;
 
     for (const track of tracks) {
       const buffer = this.buffers.get(track.id);
       if (!buffer) continue;
+
+      const trackOffset = Math.max(0, offset - track.startTime);
+      if (trackOffset >= buffer.duration) continue;
 
       const gain = ctx.createGain();
       gain.gain.value = track.muted ? 0 : track.volume;
@@ -37,9 +41,8 @@ export class AudioEngine {
       source.buffer = buffer;
       source.connect(gain);
 
-      const trackOffset = Math.max(0, offset - track.startTime);
-      const when = ctx.currentTime + Math.max(0, track.startTime - offset);
-      source.start(when, trackOffset);
+      const delay = Math.max(0, track.startTime - offset);
+      source.start(ctx.currentTime + delay, trackOffset);
 
       this.sources.set(track.id, source);
       this.gainNodes.set(track.id, gain);
@@ -53,10 +56,8 @@ export class AudioEngine {
     if (!this.playing) return;
     const ctx = this.getCtx();
     this.pausedAt = ctx.currentTime - this.startedAt;
+    this.stopSources();
     this.playing = false;
-    this.sources.forEach(s => { try { s.stop(0); } catch {} });
-    this.sources.clear();
-    this.gainNodes.clear();
   }
 
   stop() {
@@ -64,7 +65,7 @@ export class AudioEngine {
     this.pausedAt = 0;
   }
 
-  seek(time: number) {
+  seek(time: number): boolean {
     const wasPlaying = this.playing;
     if (wasPlaying) this.pause();
     this.pausedAt = time;
@@ -84,6 +85,22 @@ export class AudioEngine {
   setVolume(id: string, volume: number, muted: boolean) {
     const gain = this.gainNodes.get(id);
     if (gain) gain.gain.value = muted ? 0 : volume;
+  }
+
+  hasBuffer(id: string): boolean {
+    return this.buffers.has(id);
+  }
+
+  removeBuffer(id: string) {
+    this.buffers.delete(id);
+  }
+
+  private stopSources() {
+    this.sources.forEach(s => {
+      try { s.stop(); } catch { /* already stopped */ }
+    });
+    this.sources.clear();
+    this.gainNodes.clear();
   }
 
   dispose() {

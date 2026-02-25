@@ -7,8 +7,20 @@ import { usePlayerStore } from './stores/playerStore';
 import { Timeline } from './components/Timeline/Timeline';
 import { Transport } from './components/Player/Transport';
 
+function getMimeType(filePath: string): string {
+  const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
+  switch (ext) {
+    case 'mp3': return 'audio/mpeg';
+    case 'wav': return 'audio/wav';
+    case 'm4a': return 'audio/mp4';
+    case 'ogg': return 'audio/ogg';
+    default: return 'audio/mpeg';
+  }
+}
+
 export default function App() {
-  const { project, setProject, setBlobUrl, setBlobUrls, recordingBlobs } = useProjectStore();
+  const { project, setProject, setBlobUrl, setBlobUrls } = useProjectStore();
+  const recordingBlobs = useProjectStore(s => s.recordingBlobs);
   const { setDuration, setCurrentTime } = usePlayerStore();
 
   const handleOpenFile = async () => {
@@ -19,8 +31,7 @@ export default function App() {
     if (!selected || typeof selected !== 'string') return;
 
     const bytes = await readFile(selected);
-    const ext = selected.split('.').pop() ?? 'mp3';
-    const mime = ext === 'mp3' ? 'audio/mpeg' : ext === 'wav' ? 'audio/wav' : ext === 'm4a' ? 'audio/mp4' : 'audio/ogg';
+    const mime = getMimeType(selected);
     const blob = new Blob([bytes], { type: mime });
     const url = URL.createObjectURL(blob);
     const arrayBuffer = await blob.arrayBuffer();
@@ -39,6 +50,7 @@ export default function App() {
     setBlobUrl(newProject.tracks[0].id, url);
     setDuration(duration);
     setCurrentTime(0);
+    audioEngine.seek(0);
   };
 
   const handleSave = async () => {
@@ -64,12 +76,18 @@ export default function App() {
     setBlobUrls(blobUrls);
     setDuration(loaded.duration);
     setCurrentTime(0);
+    audioEngine.seek(0);
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#0f0f1a', color: '#fff', fontFamily: 'system-ui, sans-serif' }}>
-      {/* Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', background: '#16213e', borderBottom: '1px solid #333' }}>
+    <div style={{
+      display: 'flex', flexDirection: 'column', height: '100vh',
+      background: '#0f0f1a', color: '#fff', fontFamily: 'system-ui, sans-serif',
+    }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '8px 16px', background: '#16213e', borderBottom: '1px solid #333',
+      }}>
         <span style={{ fontWeight: 600, fontSize: 16, marginRight: 8 }}>Aboboo</span>
         <button onClick={handleOpenFile} style={toolbarBtn}>Open Audio</button>
         <button onClick={handleLoadProject} style={toolbarBtn}>Load Project</button>
@@ -79,16 +97,17 @@ export default function App() {
         )}
       </div>
 
-      {/* Timeline */}
       {project ? (
         <Timeline />
       ) : (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontSize: 16 }}>
+        <div style={{
+          flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: '#555', fontSize: 16,
+        }}>
           Open an audio file to get started
         </div>
       )}
 
-      {/* Transport */}
       <Transport />
     </div>
   );
