@@ -16,10 +16,22 @@
     "dialog:allow-open",
     "dialog:allow-save",
     "fs:default",
-    "fs:allow-read-file",
-    "fs:allow-read-text-file",
-    "fs:allow-write-file",
-    "fs:allow-mkdir",
+    {
+      "identifier": "fs:allow-read-file",
+      "allow": [{ "path": "**" }]
+    },
+    {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [{ "path": "**" }]
+    },
+    {
+      "identifier": "fs:allow-write-file",
+      "allow": [{ "path": "**" }]
+    },
+    {
+      "identifier": "fs:allow-mkdir",
+      "allow": [{ "path": "**" }]
+    },
     "fs:allow-app-read-recursive",
     "fs:allow-app-write-recursive",
     "fs:allow-document-read-recursive",
