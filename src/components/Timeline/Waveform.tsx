@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useMemo } from 'react';
 import WaveSurfer from 'wavesurfer.js';
 import { audioEngine } from '../../services/audioEngine';
 
@@ -8,6 +8,10 @@ interface WaveformProps {
   onSeek: (projectTime: number) => void;
   onReady: (duration: number) => void;
   color?: string;
+  loopStart?: number | null;
+  loopEnd?: number | null;
+  isLooping?: boolean;
+  projectDuration?: number;
 }
 
 function makeProgressColor(color: string): string {
@@ -20,11 +24,15 @@ function makeProgressColor(color: string): string {
   return color;
 }
 
-export function Waveform({ url, trackStartTime, onSeek, onReady, color = '#4a9eff' }: WaveformProps) {
+export function Waveform({
+  url, trackStartTime, onSeek, onReady, color = '#4a9eff',
+  loopStart, loopEnd, isLooping, projectDuration,
+}: WaveformProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WaveSurfer | null>(null);
   const rafRef = useRef<number>(0);
   const lastFractionRef = useRef(-1);
+  const wsDurationRef = useRef(0);
 
   const trackStartTimeRef = useRef(trackStartTime);
   const onSeekRef = useRef(onSeek);
@@ -49,7 +57,10 @@ export function Waveform({ url, trackStartTime, onSeek, onReady, color = '#4a9ef
     });
 
     ws.load(url);
-    ws.on('ready', () => onReadyRef.current(ws.getDuration()));
+    ws.on('ready', () => {
+      wsDurationRef.current = ws.getDuration();
+      onReadyRef.current(ws.getDuration());
+    });
     ws.on('interaction', (time: number) => {
       const projectTime = trackStartTimeRef.current + time;
       onSeekRef.current(projectTime);
@@ -82,5 +93,30 @@ export function Waveform({ url, trackStartTime, onSeek, onReady, color = '#4a9ef
     };
   }, [url, color]);
 
-  return <div ref={containerRef} style={{ width: '100%' }} />;
+  const loopOverlay = useMemo(() => {
+    if (loopStart == null || loopEnd == null || !projectDuration || projectDuration <= 0) return null;
+    const dur = wsDurationRef.current || projectDuration;
+    const localStart = Math.max(0, loopStart - trackStartTime);
+    const localEnd = Math.min(dur, loopEnd - trackStartTime);
+    if (localEnd <= localStart) return null;
+    const left = (localStart / dur) * 100;
+    const width = ((localEnd - localStart) / dur) * 100;
+    return { left: `${left}%`, width: `${width}%` };
+  }, [loopStart, loopEnd, projectDuration, trackStartTime]);
+
+  return (
+    <div style={{ position: 'relative', width: '100%' }}>
+      <div ref={containerRef} style={{ width: '100%' }} />
+      {loopOverlay && (
+        <div style={{
+          position: 'absolute', top: 0, bottom: 0,
+          left: loopOverlay.left, width: loopOverlay.width,
+          background: isLooping ? 'rgba(39, 174, 96, 0.2)' : 'rgba(255, 215, 0, 0.12)',
+          borderLeft: `2px solid ${isLooping ? '#27ae60' : '#f1c40f'}`,
+          borderRight: `2px solid ${isLooping ? '#27ae60' : '#f1c40f'}`,
+          pointerEvents: 'none',
+        }} />
+      )}
+    </div>
+  );
 }

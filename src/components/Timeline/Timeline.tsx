@@ -8,9 +8,13 @@ interface TrackRowProps {
   track: Track;
   blobUrl: string;
   onSeek: (time: number) => void;
+  loopStart: number | null;
+  loopEnd: number | null;
+  isLooping: boolean;
+  projectDuration: number;
 }
 
-function TrackRow({ track, blobUrl, onSeek }: TrackRowProps) {
+function TrackRow({ track, blobUrl, onSeek, loopStart, loopEnd, isLooping, projectDuration }: TrackRowProps) {
   const { updateTrack, removeTrack } = useProjectStore();
 
   return (
@@ -64,6 +68,10 @@ function TrackRow({ track, blobUrl, onSeek }: TrackRowProps) {
           onSeek={onSeek}
           onReady={(d) => updateTrack(track.id, { duration: d })}
           color={track.type === 'original' ? '#4a9eff' : '#2ecc71'}
+          loopStart={loopStart}
+          loopEnd={loopEnd}
+          isLooping={isLooping}
+          projectDuration={projectDuration}
         />
       </div>
     </div>
@@ -72,7 +80,7 @@ function TrackRow({ track, blobUrl, onSeek }: TrackRowProps) {
 
 export function Timeline() {
   const { project, blobUrls } = useProjectStore();
-  const { setCurrentTime, setIsPlaying } = usePlayerStore();
+  const { setCurrentTime, setIsPlaying, duration, loopStart, loopEnd, isLooping } = usePlayerStore();
 
   const handleSeek = async (time: number) => {
     const wasPlaying = audioEngine.seek(time);
@@ -99,6 +107,10 @@ export function Timeline() {
             track={track}
             blobUrl={url}
             onSeek={handleSeek}
+            loopStart={loopStart}
+            loopEnd={loopEnd}
+            isLooping={isLooping}
+            projectDuration={duration}
           />
         );
       })}

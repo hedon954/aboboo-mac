@@ -3,9 +3,11 @@ export class AudioEngine {
   private sources: Map<string, AudioBufferSourceNode> = new Map();
   private buffers: Map<string, AudioBuffer> = new Map();
   private gainNodes: Map<string, GainNode> = new Map();
-  private startedAt = 0;
+  private playStartRealTime = 0;
+  private playStartAudioTime = 0;
   private pausedAt = 0;
   private playing = false;
+  private rate = 1;
 
   private getCtx(): AudioContext {
     if (!this.ctx) this.ctx = new AudioContext();
@@ -39,23 +41,24 @@ export class AudioEngine {
 
       const source = ctx.createBufferSource();
       source.buffer = buffer;
+      source.playbackRate.value = this.rate;
       source.connect(gain);
 
-      const delay = Math.max(0, track.startTime - offset);
+      const delay = Math.max(0, (track.startTime - offset) / this.rate);
       source.start(ctx.currentTime + delay, trackOffset);
 
       this.sources.set(track.id, source);
       this.gainNodes.set(track.id, gain);
     }
 
-    this.startedAt = ctx.currentTime - offset;
+    this.playStartRealTime = ctx.currentTime;
+    this.playStartAudioTime = offset;
     this.playing = true;
   }
 
   pause() {
     if (!this.playing) return;
-    const ctx = this.getCtx();
-    this.pausedAt = ctx.currentTime - this.startedAt;
+    this.pausedAt = this.getCurrentTime();
     this.stopSources();
     this.playing = false;
   }
@@ -75,11 +78,28 @@ export class AudioEngine {
   getCurrentTime(): number {
     if (!this.ctx) return 0;
     if (!this.playing) return this.pausedAt;
-    return this.ctx.currentTime - this.startedAt;
+    const realElapsed = this.ctx.currentTime - this.playStartRealTime;
+    return this.playStartAudioTime + realElapsed * this.rate;
   }
 
   isPlaying(): boolean {
     return this.playing;
+  }
+
+  setPlaybackRate(newRate: number) {
+    if (this.playing && this.ctx) {
+      const currentAudioTime = this.getCurrentTime();
+      this.playStartAudioTime = currentAudioTime;
+      this.playStartRealTime = this.ctx.currentTime;
+      this.sources.forEach(source => {
+        source.playbackRate.value = newRate;
+      });
+    }
+    this.rate = newRate;
+  }
+
+  getPlaybackRate(): number {
+    return this.rate;
   }
 
   setVolume(id: string, volume: number, muted: boolean) {
