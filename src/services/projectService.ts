@@ -73,9 +73,12 @@ export class ProjectService {
     for (const track of project.tracks) {
       if (!track.audioPath) continue;
       try {
-        const fullPath = track.type === 'original'
+        const isAbsolute = track.audioPath.startsWith('/');
+        const fullPath = isAbsolute
           ? track.audioPath
-          : `${appDataDir}/${track.audioPath}`;
+          : track.type === 'original'
+            ? track.audioPath
+            : `${appDataDir}/${track.audioPath}`;
 
         const bytes = await readFile(fullPath);
         const mime = getMimeType(track.audioPath);
